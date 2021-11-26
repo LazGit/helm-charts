@@ -1,0 +1,166 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "deployment.fullname" . }}
+  labels:
+    {{- include "deployment.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "deployment.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "deployment.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "deployment.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: {{ .Chart.Name }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+
+          {{- if or .Values.ports }}
+          ports:
+          {{- range $key,$value := .Values.ports }}
+            - name: {{ $key }}
+              containerPort: {{ $value.containerPort }}
+              protocol:  {{ $value.protocol }}
+          {{- end }}
+          {{- end }}
+
+          {{- if or .Values.livenessProbe }}
+          {{- range $key,$value := .Values.livenessProbe }}
+          livenessProbe:
+            {{ $key }}:
+              {{- if or $value.path }}
+              path: {{ $value.path }}
+              {{- end }}
+              port: {{ $value.port }}
+          {{- end }}
+          {{- end }}
+
+          {{- if or .Values.readinessProbe }}
+          {{- range $key,$value := .Values.readinessProbe }}
+          readinessProbe:
+            {{ $key }}:
+              {{- if or $value.path }}
+              path: {{ $value.path }}
+              {{- end }}
+              port: {{ $value.port }}
+          {{- end }}
+          {{- end }}
+
+          {{- if or .Values.configmapFile .Values.secretFile .Values.volume }}
+          volumeMounts:
+
+          {{- range $key,$value := .Values.configmapFile }}
+          {{- if or $value.mountPath }}
+            - name: {{ $key | lower }}
+              mountPath: {{ $value.mountPath }}
+              {{- if or $value.subPath }}
+              subPath: {{ $value.subPath }}
+              {{- end }}         
+              {{- if or $value.readOnly }}
+              readOnly: {{ $value.readOnly }}
+              {{- end }}
+          {{- end }}
+          {{- end }}
+
+          {{- range $key,$value := .Values.secretFile }}
+          {{- if or $value.mountPath }}
+            - name: {{ $key | lower }}
+              mountPath: {{ $value.mountPath }}
+              {{- if or $value.subPath }}
+              subPath: {{ $value.subPath }}
+              {{- end }}
+              {{- if or $value.readOnly }}
+              readOnly: {{ $value.readOnly }}
+              {{- end }}
+          {{- end }}
+          {{- end }}
+
+          {{- range $key,$value := .Values.volume }}
+            - name: {{ $key | lower }}
+              mountPath: {{ $value }}
+          {{- end }}
+
+          {{- end }}
+
+
+          {{- if or $.Values.env $.Values.configmap $.Values.secret }}
+          env:
+
+            {{- range $key,$value := .Values.env }}
+            - name: {{ $key | upper }}
+              value: {{ $value | quote }}
+            {{- end }}
+
+            {{- range $key,$value := .Values.configmap }}
+            - name: {{ $key | upper }}
+              valueFrom:
+                configMapKeyRef:
+                  name: {{ include "deployment.fullname" $ }}
+                  key: {{ $key }}
+            {{- end }}
+
+            {{- range $key,$value := .Values.secret }}
+            - name: {{ $key | upper }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "deployment.fullname" $ }}
+                  key: {{ $key }}
+            {{- end }}
+
+          {{- end }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+
+        {{- if or .Values.configmapFile .Values.secretFile .Values.volume }}
+      volumes:
+
+      {{- range $key,$value := .Values.configmapFile }}
+        - name: {{ $key | lower }}
+          configMap:
+            name: {{ include "deployment.fullname" $ }}-{{ $key }}
+      {{- end }}
+
+      {{- range $key,$value := .Values.secretFile }}
+        - name: {{ $key | lower }}
+          secret:
+            secretName: {{ include "deployment.fullname" $ }}-{{ $key }}
+      {{- end }}
+
+      {{- range $key,$value := .Values.volume }}
+        - name: {{ $key | lower }}
+          emptyDir: {}
+      {{- end }}
+
+      {{- end }}
+
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,13 @@
+{{- if or .Values.configmapFile }}
+{{- range $key,$value := .Values.configmapFile }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "deployment.fullname" $ }}-{{ $key }}
+  labels:
+    {{- include "deployment.labels" $ | nindent 4 }}
+data:
+  {{ $key }}: |
+      {{ $.Files.Get $value.file }}
+{{- end }}
+{{- end }}
